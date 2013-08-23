@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<node name="/">
+   <interface name="org.freedesktop.DBus.Introspectable">
+      <method name="Introspect">
+         <arg type="s" direction="out" />
+      </method>
+   </interface>
+   <interface name="org.freedesktop.DBus.Properties">
+      <method name="Get">
+         <arg type="s" direction="in" />
+         <arg type="s" direction="in" />
+         <arg type="v" direction="out" />
+      </method>
+      <method name="GetAll">
+         <arg type="s" direction="in" />
+         <arg type="a{sv}" direction="out" />
+      </method>
+      <method name="Set">
+         <arg type="s" direction="in" />
+         <arg type="s" direction="in" />
+         <arg type="v" direction="in" />
+      </method>
+      <signal name="PropertiesChanged">
+         <arg type="s" />
+         <arg type="a{sv}" />
+         <arg type="as" />
+      </signal>
+   </interface>
+   <interface name="org.s2">
+      <method name="Quit">
+         <annotation name="org.freedesktop.DBus.Method.NoReply" value="true" />
+      </method>
+   </interface>
+   <interface name="org.s2.Core">
+      <property name="Connections" type="a{su}" access="read" /><!-- {JID/OBJECT} -->
+      <method name="Connect">
+         <arg type="s" name="jid" direction="in" /><!-- saved JID to connect -->
+      </method>
+      <method name="Disconnect">
+         <arg type="s" name="jid" direction="in" /><!-- connected JID to disconnect -->
+      </method>
+      <signal name="ConnectionState">
+         <arg type="s" name="jid" /><!-- connected JID which changed state -->
+         <arg type="u" name="state" /><!-- Shotgun_Connection_State -->
+      </signal>
+   </interface>
+   <interface name="org.s2.Connection"> <!-- objects are number<->JID mappings -->
+      <property name="JID" type="s" access="read" /><!-- client's connected JID -->
+      <property name="Contacts" type="as" access="read" />
+      <method name="SendMessage">
+         <arg type="s" name="jid" /><!-- JID of the contact -->
+         <arg type="s" name="message" /><!-- message text -->
+         <arg type="u" name="status" /><!-- Shotgun_Message_Status -->
+      </method>
+      <signal name="ContactStatusChange">
+         <arg type="s" name="jid" /><!-- JID of the contact -->
+         <arg type="s" name="photo" /><!-- photo sha1 -->
+         <arg type="s" name="desc" /><!-- status description text -->
+         <arg type="i" name="priority" /><!-- priority -->
+         <arg type="u" name="idle" /><!-- idle -->
+         <arg type="d" name="timestamp" /><!-- idle -->
+         <arg type="u" name="status" /><!-- Shotgun_User_Status -->
+         <arg type="u" name="type" /><!-- Shotgun_Presence_Type -->
+         <arg type="b" name="vcard" /><!-- Shotgun_Presence_Type -->
+      </signal>
+      <signal name="MessageReceived">
+         <arg type="s" name="jid" /><!-- JID of the contact -->
+         <arg type="s" name="message" /><!-- message text -->
+         <arg type="u" name="status" /><!-- Shotgun_Message_Status -->
+      </signal>
+      <signal name="MessageSent">
+         <arg type="s" name="jid" /><!-- JID of the contact -->
+         <arg type="s" name="message" /><!-- message text -->
+         <arg type="u" name="status" /><!-- Shotgun_Message_Status -->
+      </signal>
+   </interface>
+</node>
+
