@@ -40,11 +40,6 @@ collections {
          }
       }
       parts {
-         part { name: "base"; type: RECT;
-            description { state: "default";
-               color: 0 0 0 255;
-            }
-         }
          part { name: "color_clip"; type: RECT;
             description { state: "default";
                color: 255 255 255 255;
@@ -71,8 +66,8 @@ collections {
             }
          }
          part { name: "img"; clip_to: "clip";
+            scale: 1;
             description { state: "default";
-               min: 16 16;
                aspect: 1.0 1.0;
                aspect_preference: BOTH;
                image.normal: "arrows_both.png";
@@ -154,4 +149,50 @@ collections {
 #endif
    ICON("userunknown", 16, 0, 5, -6);
 
+   group { name: "info_mover";
+      parts {
+         part { name: "swallow.mover"; type: SWALLOW;
+            scale: 1;
+            description { state: "default" 0.0;
+               fixed: 1 1;
+               visible: 0;
+               rel1 {
+                  relative: 1.0 0.0;
+                  offset: 888 8;
+               }
+               rel2 {
+                  relative: 1.0 1.0;
+                  offset: 8 -9;
+               }
+            }
+            description { state: "visible" 0.0;
+               inherit: "default" 0.0;
+               visible: 1;
+               rel1 {
+                  relative: 0 0;
+                  offset: 8 8;
+               }
+               rel2 {
+                  offset: -9 -9;
+               }
+            }
+         }
+      }
+      program { name: "show";
+         signal: "s2.show"; source: "s2";
+         action: STATE_SET "visible" 0.0;
+         transition: LINEAR 0.3;
+         target: "swallow.mover";
+      }
+      program {
+         signal: "s2.hide"; source: "s2";
+         action: STATE_SET "default" 0.0;
+         transition: LINEAR 0.3 CURRENT;
+         target: "swallow.mover";
+         after: "hide_after";
+      }
+      program { name: "hide_after";
+         action: SIGNAL_EMIT "s2.hide.done" "";
+      }
+   }
 }

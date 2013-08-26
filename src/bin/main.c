@@ -14,7 +14,6 @@
 #define CRI(...)            EINA_LOG_DOM_CRIT(ui_log_dom, __VA_ARGS__)
 
 typedef struct _S2_Module S2_Module;
-typedef struct _S2_List_Module S2_List_Module;
 
 typedef S2_Module_Type (*S2_Module_Type_Cb)(void);
 typedef Eina_Bool (*S2_Module_Init_Cb)(void);
@@ -31,12 +30,6 @@ struct _S2_Module
    S2_Module_Init_Cb init;
    S2_Module_Shutdown_Cb shutdown;
    Eina_Module *module;
-};
-
-struct _S2_List_Module
-{
-   S2_Module module;
-   
 };
 
 int ui_log_dom = -1;
@@ -229,6 +222,7 @@ sc_presence_add(S2_Contact *sc, Shotgun_Event_Presence *ev)
    else
      {
         p = calloc(1, sizeof(Shotgun_Event_Presence));
+        p->account = sc->auth->auth;
         p->priority = ev->priority;
         p->jid = eina_stringshare_ref(ev->jid);
         sc->presences = eina_list_sorted_insert(sc->presences, (Eina_Compare_Cb)sc_presence_compare_cb, p);
@@ -432,6 +426,12 @@ EAPI S2_Contact *
 ui_contact_find(S2_Auth *sa, const char *jid)
 {
    return eina_hash_find(sa->contacts, jid);
+}
+
+EAPI void
+ui_contact_chat_open(S2_Contact *sc)
+{
+   
 }
 
 EAPI S2_Auth *
