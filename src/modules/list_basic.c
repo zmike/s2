@@ -137,6 +137,12 @@ list_item_content_get(S2_Contact *sc, Evas_Object *obj, const char *part)
      }
    edje_object_signal_emit(ic, sig, "s2");
    edje_object_message_signal_process(ic);
+   /* FIXME: holy fuck genlist content sizing is retarded if you aren't using elm_icon */
+   //edje_object_calc_force(ic);
+   //edje_object_size_min_calc(ic, &w, &h);
+   //EXPAND(ic);
+   //FILL(ic);
+   evas_object_size_hint_min_set(ic, 40, 40);
    evas_object_show(ic);
 
    return ic;
@@ -146,7 +152,7 @@ static void
 list_item_add(S2_Contact *sc, Evas_Object *win)
 {
    static Elm_Genlist_Item_Class glit = {
-        .item_style = NULL,
+        .item_style = "double_label",
         .func = {
              .text_get = (Elm_Genlist_Item_Text_Get_Cb)list_item_text_get,
              .content_get = (Elm_Genlist_Item_Content_Get_Cb)list_item_content_get,
@@ -199,9 +205,8 @@ list_create(S2_Auth *sa)
    elm_genlist_reorder_mode_set(o, EINA_TRUE);
    elm_scroller_bounce_set(o, EINA_FALSE, EINA_FALSE);
    elm_scroller_policy_set(o, ELM_SCROLLER_POLICY_OFF, ELM_SCROLLER_POLICY_AUTO);
-   //elm_genlist_homogeneous_set(o, EINA_TRUE);
-   elm_genlist_mode_set(o, ELM_LIST_EXPAND);
-   //elm_genlist_mode_set(o, ELM_LIST_COMPRESS);
+   elm_genlist_homogeneous_set(o, EINA_TRUE);
+   elm_genlist_mode_set(o, ELM_LIST_COMPRESS);
    elm_layout_content_set(ly, "swallow.list", o);
    //evas_object_smart_callback_add(o, "activated",
                                   //(Evas_Smart_Cb)list_click_cb, NULL);
@@ -242,6 +247,11 @@ presence_add(void *d EINA_UNUSED, int t EINA_UNUSED, S2_Contact *sc)
 static Eina_Bool
 presence_del(void *d EINA_UNUSED, int t EINA_UNUSED, S2_Contact *sc)
 {
+   if (!sc->list_item) return ECORE_CALLBACK_RENEW;
+   if (sc->presences)
+     elm_genlist_item_update(sc->list_item);
+   else
+     elm_object_item_del(sc->list_item);
    return ECORE_CALLBACK_RENEW;
 }
 
@@ -254,14 +264,10 @@ presence_update(void *d EINA_UNUSED, int t EINA_UNUSED, S2_Contact *sc)
 }
 
 static Eina_Bool
-contact_add(void *d EINA_UNUSED, int t EINA_UNUSED, S2_Contact *sc)
-{
-   return ECORE_CALLBACK_RENEW;
-}
-
-static Eina_Bool
 contact_del(void *d EINA_UNUSED, int t EINA_UNUSED, S2_Contact *sc)
 {
+   if (sc->list_item)
+     elm_object_item_del(sc->list_item);
    return ECORE_CALLBACK_RENEW;
 }
 
@@ -292,7 +298,6 @@ ui_module_init(void)
 
    lists = eina_hash_pointer_new((Eina_Free_Cb)evas_object_del);
 
-   E_LIST_HANDLER_APPEND(handlers, S2_EVENT_CONTACT_ADD, contact_add, NULL);
    E_LIST_HANDLER_APPEND(handlers, S2_EVENT_CONTACT_DEL, contact_del, NULL);
    E_LIST_HANDLER_APPEND(handlers, S2_EVENT_CONTACT_UPDATE, contact_update, NULL);
    E_LIST_HANDLER_APPEND(handlers, S2_EVENT_CONTACT_PRESENCE_ADD, presence_add, NULL);

@@ -49,19 +49,19 @@ collections {
             description { state: "default";
                color: 255 255 255 255;
             }
-            description { state: "normal";
+            description { state: "s2.normal";
                color: 0 230 0 255;
             }
-            description { state: "away";
+            description { state: "s2.away";
                color: 255 255 51 255;
             }
-            description { state: "chat";
+            description { state: "s2.chat";
                color: 0 255 0 255;
             }
-            description { state: "dnd";
+            description { state: "s2.dnd";
                color: 0 0 255 255;
             }
-            description { state: "xa";
+            description { state: "s2.xa";
                color: 255 0 0 255;
             }
          }
@@ -72,6 +72,7 @@ collections {
          }
          part { name: "img"; clip_to: "clip";
             description { state: "default";
+               min: 16 16;
                aspect: 1.0 1.0;
                aspect_preference: BOTH;
                image.normal: "arrows_both.png";
