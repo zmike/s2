@@ -14,6 +14,7 @@
 #define CRI(...)            EINA_LOG_DOM_CRIT(ui_log_dom, __VA_ARGS__)
 
 typedef struct _S2_Module S2_Module;
+typedef struct _S2_List_Module S2_List_Module;
 
 typedef S2_Module_Type (*S2_Module_Type_Cb)(void);
 typedef Eina_Bool (*S2_Module_Init_Cb)(void);
@@ -32,7 +33,21 @@ struct _S2_Module
    Eina_Module *module;
 };
 
+struct _S2_List_Module
+{
+   S2_Module module;
+   
+};
+
 int ui_log_dom = -1;
+EAPI int S2_EVENT_CONTACT_ADD = -1;
+EAPI int S2_EVENT_CONTACT_UPDATE = -1;
+EAPI int S2_EVENT_CONTACT_PRESENCE_ADD = -1;
+EAPI int S2_EVENT_CONTACT_PRESENCE_UPDATE = -1;
+EAPI int S2_EVENT_CONTACT_PRESENCE_DEL = -1;
+EAPI int S2_EVENT_CONTACT_DEL = -1;
+
+
 static Ecore_Event_Handler *dh = NULL;
 static Ecore_Event_Handler *ch = NULL;
 
@@ -44,6 +59,10 @@ static Eina_Inlist *modules[S2_MODULE_TYPE_LAST];
 
 static Eina_List *message_send_listeners = NULL;
 static unsigned int connected_count = 0;
+
+static void
+fake_free(void *d EINA_UNUSED, void *ev EINA_UNUSED)
+{}
 
 static Eina_Bool
 module_check(Eina_Module *m, void *d EINA_UNUSED)
@@ -116,6 +135,12 @@ sc_free(S2_Contact *sc)
    free(sc);
 }
 
+static void
+sc_free_cb(void *d EINA_UNUSED, S2_Contact *sc)
+{
+   eina_hash_del_by_key(sc->auth->contacts, sc->jid);
+}
+
 static Eina_Bool
 con_state(void *d EINA_UNUSED, int type EINA_UNUSED, Shotgun_Auth *auth EINA_UNUSED)
 {
@@ -168,8 +193,10 @@ sc_add(S2_Auth *sa, const char *jid)
    S2_Contact *sc;
 
    sc = calloc(1, sizeof(S2_Contact));
+   sc->auth = sa;
    sc->jid = eina_stringshare_add(jid);
    eina_hash_direct_add(sa->contacts, sc->jid, sc);
+   ecore_event_add(S2_EVENT_CONTACT_ADD, sc, fake_free, NULL);
    return sc;
 }
 
@@ -197,12 +224,15 @@ sc_presence_add(S2_Contact *sc, Shotgun_Event_Presence *ev)
      {
         p->priority = ev->priority;
         sc->presences = eina_list_sort(sc->presences, 0, (Eina_Compare_Cb)sc_presence_compare_cb);
+        ecore_event_add(S2_EVENT_CONTACT_PRESENCE_UPDATE, sc, fake_free, NULL);
      }
    else
      {
         p = calloc(1, sizeof(Shotgun_Event_Presence));
         p->priority = ev->priority;
+        p->jid = eina_stringshare_ref(ev->jid);
         sc->presences = eina_list_sorted_insert(sc->presences, (Eina_Compare_Cb)sc_presence_compare_cb, p);
+        ecore_event_add(S2_EVENT_CONTACT_PRESENCE_ADD, sc, fake_free, NULL);
      }
 
    eina_stringshare_replace(&p->photo, ev->photo);
@@ -225,6 +255,7 @@ sc_presence_del(S2_Contact *sc, Shotgun_Event_Presence *ev)
         if (ev->jid != p->jid) continue;
         sc->presences = eina_list_remove_list(sc->presences, l);
         shotgun_event_presence_free(p);
+        ecore_event_add(S2_EVENT_CONTACT_PRESENCE_DEL, sc, fake_free, NULL);
         return;
      }
 }
@@ -257,7 +288,6 @@ presence_cb(void *d EINA_UNUSED, int t EINA_UNUSED, Shotgun_Event_Presence *ev)
         sc = sc_add(sa, base_jid);
         sc->subscription = SHOTGUN_USER_SUBSCRIPTION_FROM;;
         sc_presence_add(sc, ev);
-#warning LIST ADD HERE
         return ECORE_CALLBACK_RENEW;
      }
    if (!ev->status)
@@ -275,7 +305,6 @@ presence_cb(void *d EINA_UNUSED, int t EINA_UNUSED, Shotgun_Event_Presence *ev)
       default:
         break;
      }
-#warning LIST ADD/UPDATE HERE
    return ECORE_CALLBACK_RENEW;
 }
 
@@ -317,11 +346,13 @@ iq_cb(void *d EINA_UNUSED, int t EINA_UNUSED, Shotgun_Event_Iq *ev)
              {
                 if (user->subscription == SHOTGUN_USER_SUBSCRIPTION_REMOVE)
                   {
-                     eina_hash_del_by_key(sa->contacts, user->jid);
+                     ecore_event_add(S2_EVENT_CONTACT_DEL, eina_hash_find(sa->contacts, user->jid), (Ecore_End_Cb)sc_free_cb, NULL);;
                      continue;
                   }
                 sc = eina_hash_find(sa->contacts, user->jid);
-                if (!sc)
+                if (sc)
+                  ecore_event_add(S2_EVENT_CONTACT_UPDATE, sc, fake_free, NULL);
+                else
                   sc = sc_add(sa, user->jid);
                 eina_stringshare_replace(&sc->name, user->name);
                 EINA_LIST_FREE(sc->groups, g)
@@ -330,7 +361,6 @@ iq_cb(void *d EINA_UNUSED, int t EINA_UNUSED, Shotgun_Event_Iq *ev)
                   sc->groups = eina_list_append(sc->groups, eina_stringshare_ref(g));
                 sc->subscription = user->subscription;
                 sc->subscription_pending = user->subscription_pending;
-#warning UPDATE LIST ITEM HERE
              }
            break;
         }
@@ -349,9 +379,9 @@ iq_cb(void *d EINA_UNUSED, int t EINA_UNUSED, Shotgun_Event_Iq *ev)
                 INF("User info for %s unchanged, not updating cache", sc->jid);
                 break;
              }
-           sc->info.full_name = eina_stringshare_ref(info->full_name);
-           sc->info.photo.type = eina_stringshare_ref(info->photo.type);
-           sc->info.photo.sha1 = eina_stringshare_ref(info->photo.sha1);
+           eina_stringshare_replace(&sc->info.full_name, info->full_name);
+           eina_stringshare_replace(&sc->info.photo.type, info->photo.type);
+           eina_stringshare_replace(&sc->info.photo.sha1, info->photo.sha1);
            sc->info.photo.size = info->photo.size;
            if (info->photo.data && info->photo.size)
              {
@@ -359,6 +389,7 @@ iq_cb(void *d EINA_UNUSED, int t EINA_UNUSED, Shotgun_Event_Iq *ev)
                 sc->info.photo.data = malloc(info->photo.size);
                 memcpy(sc->info.photo.data, info->photo.data, info->photo.size);
              }
+           ecore_event_add(S2_EVENT_CONTACT_UPDATE, sc, fake_free, NULL);
            break;
         }
       case SHOTGUN_IQ_EVENT_TYPE_SERVER_QUERY:
@@ -477,6 +508,13 @@ main(int argc, char *argv[])
    ecore_event_handler_add(SHOTGUN_EVENT_IQ, (Ecore_Event_Handler_Cb)iq_cb, NULL);
    ecore_event_handler_add(SHOTGUN_EVENT_MESSAGE, (Ecore_Event_Handler_Cb)message_cb, NULL);
 
+   S2_EVENT_CONTACT_ADD = ecore_event_type_new();
+   S2_EVENT_CONTACT_UPDATE = ecore_event_type_new();
+   S2_EVENT_CONTACT_PRESENCE_ADD = ecore_event_type_new();
+   S2_EVENT_CONTACT_PRESENCE_UPDATE = ecore_event_type_new();
+   S2_EVENT_CONTACT_PRESENCE_DEL = ecore_event_type_new();
+   S2_EVENT_CONTACT_DEL = ecore_event_type_new();
+
    ecore_app_args_set(argc, (const char**)argv);
 
    /* UI_MODULE_DIR can be set by the user to override and use a different module loading directory,
@@ -523,6 +561,12 @@ main(int argc, char *argv[])
           }
      }
    EINA_INLIST_FOREACH(modules[S2_MODULE_TYPE_UTIL], mod)
+     {
+        if (!mod->init())
+          ERR("Module '%s' failed to load!", eina_module_file_get(mod->mod));
+     }
+
+   EINA_INLIST_FOREACH(modules[S2_MODULE_TYPE_LIST], mod)
      {
         if (!mod->init())
           ERR("Module '%s' failed to load!", eina_module_file_get(mod->mod));

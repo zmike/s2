@@ -120,6 +120,15 @@ AC_ARG_ENABLE([module-login-dummy],
    [want_dummy_login=$enableval], [])
 AM_CONDITIONAL([MOD_DUMMY_LOGIN], [test "x$want_dummy_login" = "xyes"])
 
+want_list_basic=yes
+AC_ARG_ENABLE([module-list-basic],
+   [AC_HELP_STRING([--disable-module-list-basic], [disable basic list module. @<:@default=detect@:>@])],
+   [want_list_basic=$enableval], [])
+if test "x$want_list_basic" != "xno" ; then
+   PKG_CHECK_MODULES([LIST_BASIC], [evas edje elementary], [have_list_basic=yes])
+fi
+AM_CONDITIONAL([MOD_LIST_BASIC], [test "x$have_list_basic" = "xyes"])
+
 ########################################
 
 case "$host_os" in
@@ -180,6 +189,7 @@ cat << MODULES_EOF
 Modules:
  * dummy_login.........: $want_dummy_login
  * dbus_conn...........: $want_dbus_conn_mod
+ * list_basic..........: $have_list_basic
 MODULES_EOF
 echo
 

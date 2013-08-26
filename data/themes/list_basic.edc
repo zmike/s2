@@ -1,0 +1,156 @@
+collections {
+   group { name: "list";
+      parts {
+         part { name: "base"; type: RECT;
+            description { state: "default";
+               color: 0 0 0 255;
+            }
+         }
+         part { name: "swallow.list"; type: SWALLOW;
+            description { state: "default";
+            }
+         }
+      }
+   }
+
+   group { name: "status_icon"; min: 16 16;
+      images {
+         image: "arrows_both.png" COMP;
+         image: "arrows_pending_left.png" COMP;
+         image: "arrows_pending_right.png" COMP;
+         image: "arrows_rejected.png" COMP;
+         image: "x.png" COMP;
+      }
+      script {
+         public message(Msg_Type:type, id, ...) {
+            if ((type == MSG_INT_SET) && (id == 0)) {
+               new idle, alpha;
+
+               idle = getarg(2);
+
+               custom_state(PART:"clip", "default", 0.0);
+               if (idle >= 10) {
+                 alpha=255-(12*((idle-10)/10));
+                 if (alpha < 64)
+                   alpha = 64;
+               } else
+                 alpha=255;
+               set_state_val(PART:"clip", STATE_COLOR, 255, 255, 255, alpha);
+            }
+         }
+      }
+      parts {
+         part { name: "base"; type: RECT;
+            description { state: "default";
+               color: 0 0 0 255;
+            }
+         }
+         part { name: "color_clip"; type: RECT;
+            description { state: "default";
+               color: 255 255 255 255;
+            }
+            description { state: "normal";
+               color: 0 230 0 255;
+            }
+            description { state: "away";
+               color: 255 255 51 255;
+            }
+            description { state: "chat";
+               color: 0 255 0 255;
+            }
+            description { state: "dnd";
+               color: 0 0 255 255;
+            }
+            description { state: "xa";
+               color: 255 0 0 255;
+            }
+         }
+         part { name: "clip"; type: RECT; clip_to: "color_clip";
+            description { state: "default";
+               color: 255 255 255 255;
+            }
+         }
+         part { name: "img"; clip_to: "clip";
+            description { state: "default";
+               aspect: 1.0 1.0;
+               aspect_preference: BOTH;
+               image.normal: "arrows_both.png";
+            }
+            description { state: "left";
+               inherit: "default";
+               image.normal: "arrows_pending_left.png";
+            }
+            description { state: "right";
+               inherit: "default";
+               image.normal: "arrows_pending_right.png";
+            }
+            description { state: "rejected";
+               inherit: "default";
+               image.normal: "arrows_rejected.png";
+            }
+            description { state: "x";
+               inherit: "default";
+               image.normal: "x.png";
+            }
+         }
+      }
+      programs {
+         program {
+            signal: "s2.both"; source: "s2";
+            action: STATE_SET "default" 0.0;
+            target: "img";
+         }
+         program {
+            signal: "s2.left"; source: "s2";
+            action: STATE_SET "left" 0.0;
+            target: "img";
+         }
+         program {
+            signal: "s2.right"; source: "s2";
+            action: STATE_SET "right" 0.0;
+            target: "img";
+         }
+         program {
+            signal: "s2.rejected"; source: "s2";
+            action: STATE_SET "rejected" 0.0;
+            target: "img";
+         }
+         program {
+            signal: "s2.x"; source: "s2";
+            action: STATE_SET "x" 0.0;
+            target: "img";
+         }
+#define STATUS(X) \
+         program { \
+            signal: X; source: "s2"; \
+            action: STATE_SET X 0.0; \
+            target: "color_clip"; \
+            transition: LINEAR 0.3; \
+         }
+         //STATUS("s2.none")
+         STATUS("s2.normal")
+         STATUS("s2.away")
+         STATUS("s2.chat")
+         STATUS("s2.dnd")
+         STATUS("s2.xa")
+      }
+   }
+#define ICON(Name, Min, Max, Rel1, Rel2)                      \
+ group { name: "list_basic/"##Name##""; min: Min Min; max: Max Max; \
+    images.image: Name##".png" COMP; parts { part { name: "base";             \
+    description { aspect: 1.0 1.0; aspect_preference: BOTH; rel1.offset: Rel1 Rel1; rel2.offset: Rel2 Rel2; \
+             image.normal: Name##".png"; } } } }
+#if 0
+   ICON("x", 16, 0, 0, 0);
+   ICON("useradd", 16, 0, 0, 0);
+   ICON("userdel", 16, 0, 0, 0);
+   ICON("dialog_ok", 16, 0, 0, 0);
+   ICON("settings", 16, 0, 0, 0);
+   ICON("status", 16, 0, 0, 0);
+   ICON("logout", 16, 0, 0, 0);
+
+   ICON("useroffline", 16, 0, 5, -6);
+#endif
+   ICON("userunknown", 16, 0, 5, -6);
+
+}
