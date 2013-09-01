@@ -81,7 +81,7 @@ chat_insert(Evas_Object *win, Evas_Object *entry, const char *from, const char *
    nlen = name ? strlen(name) : 0;
 
    /* construct timestamp if requested by current theme */
-   ts = elm_layout_data_get(ly, "timestamp");
+   ts = elm_layout_data_get(ly, "markup/header/timestamp");
    if (ts)
      len = strftime(timebuf, sizeof(timebuf), ts,
                     localtime((time_t[]){ ecore_time_unix_get() }));
@@ -242,6 +242,7 @@ chat_focus(Evas_Object *pane)
    it = evas_object_data_get(pane, "toolbar_item");
    if (it) //can be NULL if selected during creation */
      elm_toolbar_item_selected_set(it, 1);
+   elm_object_focus_set(elm_object_part_content_get(pane, "elm.swallow.right"), 1);
 }
 
 static void
