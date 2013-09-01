@@ -21,35 +21,8 @@
 static Eina_List *handlers = NULL;
 static Eina_Hash *chats = NULL;
 
-static void
-chat_win_key(S2_Auth *sa, Evas *e EINA_UNUSED, Evas_Object *obj, Evas_Event_Key_Down *ev)
-{
-   if ((!strcmp(ev->keyname, "Return")) || (!strcmp(ev->keyname, "KP_Enter")))
-     {
-       char *s;
-       const char *txt;
-       S2_Contact *sc;
-       Evas_Object *pane, *entry;
-
-       /* FIXME: add popup error or something? */
-       if (shotgun_connection_state_get(sa->auth) != SHOTGUN_CONNECTION_STATE_CONNECTED) return;
-       sc = ui_contact_find(sa, evas_object_data_get(obj, "focused"));
-
-       pane = evas_object_data_get(obj, sc->jid);
-       entry = elm_object_part_content_get(pane, "elm.swallow.right");
-
-       txt = elm_entry_entry_get(entry);
-       if ((!txt) || (!txt[0])) return;
-
-       s = elm_entry_markup_to_utf8(txt);
-
-       ui_shotgun_message_send(sa, sc, s, SHOTGUN_MESSAGE_STATUS_ACTIVE, sc->xhtml_im);
-       elm_entry_entry_set(entry, "");
-       elm_entry_cursor_end_set(entry);
-
-       free(s);
-     }
-}
+typedef Elm_Object_Item *(Chat_Toolbar_Item_Cycle_Cb)(const Elm_Object_Item*);
+typedef Elm_Object_Item *(Chat_Toolbar_Item_End_Cb)(const Evas_Object *);
 
 static void
 chat_insert(Evas_Object *win, Evas_Object *entry, const char *from, const char *msg)
@@ -157,10 +130,142 @@ chat_win_del(void *data, Evas *e EINA_UNUSED, Evas_Object *obj, void *event_info
    eina_hash_del_by_key(chats, &sa->auth);
 }
 
+static void
+chat_focus(Evas_Object *pane)
+{
+   Evas_Object *ic, *cur, *ly, *win = evas_object_data_get(pane, "win");
+   Elm_Object_Item *it;
+   Eina_Stringshare *focused;
+   S2_Contact *sc;
+
+   sc = evas_object_data_get(pane, "sc");
+   focused = evas_object_data_get(win, "focused");
+   /* trying to refocus current focused */
+   if (focused == sc->jid) return;
+   ly = evas_object_data_get(win, "layout");
+
+   cur = elm_layout_content_unset(ly, "swallow.chat");
+   if (cur) evas_object_hide(cur);
+   elm_layout_content_set(ly, "swallow.chat", pane);
+   evas_object_data_set(win, "focused", sc->jid);
+   evas_object_data_del(pane, "updated");
+
+   elm_win_title_set(win, ui_contact_name_get(sc));
+   it = evas_object_data_get(pane, "toolbar_item");
+   if (it) //can be NULL if selected during creation */
+     elm_toolbar_item_selected_set(it, 1);
+   elm_object_focus_set(elm_object_part_content_get(pane, "elm.swallow.right"), 1);
+
+   ic = evas_object_data_get(win, "icon");
+   if (sc->info.photo.data && sc->info.photo.size)
+     evas_object_image_memfile_set(ic, sc->info.photo.data, sc->info.photo.size, NULL, NULL);
+   else
+     evas_object_image_file_set(ic, evas_object_data_get(win, "file"), "chat_basic/userunknown");
+   elm_win_icon_object_set(win, ic);
+}
+
+
+static void
+chat_cycle(Evas_Object *win, Chat_Toolbar_Item_Cycle_Cb it_cb, Chat_Toolbar_Item_End_Cb end_cb)
+{
+   Evas_Object *pane, *p;
+   Eina_Stringshare *focused;
+   Elm_Object_Item *start,  *it, *itr;
+
+   focused = evas_object_data_get(win, "focused");
+   pane = evas_object_data_get(win, focused);
+   start = evas_object_data_get(pane, "toolbar_item");
+   if (!start) return; //probably window deleted
+   /* starting point */
+   it = itr = it_cb(start);
+   do {
+      p = elm_object_item_data_get(it);
+      if (evas_object_data_get(p, "updated"))
+        {
+           chat_focus(p);
+           return;
+        }
+      it = it_cb(it);
+   } while (it);
+   it = end_cb(elm_object_item_widget_get(start));
+   do {
+      if (it == start) break;
+      p = elm_object_item_data_get(it);
+      if (evas_object_data_get(p, "updated"))
+        {
+           chat_focus(p);
+           return;
+        }
+      it = it_cb(it);
+   } while (it);
+   chat_focus(elm_object_item_data_get(itr));
+}
+
+static void
+chat_cycle_prev(Evas_Object *win)
+{
+   chat_cycle(win, elm_toolbar_item_prev_get, elm_toolbar_last_item_get);
+}
+
+static void
+chat_cycle_next(Evas_Object *win)
+{
+   chat_cycle(win, elm_toolbar_item_next_get, elm_toolbar_first_item_get);
+}
+
+static void
+chat_win_key(S2_Auth *sa, Evas *e EINA_UNUSED, Evas_Object *obj, Evas_Event_Key_Down *ev)
+{
+   if ((!strcmp(ev->keyname, "Return")) || (!strcmp(ev->keyname, "KP_Enter")))
+     {
+       char *s;
+       const char *txt;
+       S2_Contact *sc;
+       Evas_Object *pane, *entry;
+
+       /* FIXME: add popup error or something? */
+       if (shotgun_connection_state_get(sa->auth) != SHOTGUN_CONNECTION_STATE_CONNECTED) return;
+       sc = ui_contact_find(sa, evas_object_data_get(obj, "focused"));
+
+       pane = evas_object_data_get(obj, sc->jid);
+       entry = elm_object_part_content_get(pane, "elm.swallow.right");
+
+       txt = elm_entry_entry_get(entry);
+       if ((!txt) || (!txt[0])) return;
+
+       s = elm_entry_markup_to_utf8(txt);
+
+       ui_shotgun_message_send(sa, sc, s, SHOTGUN_MESSAGE_STATUS_ACTIVE, sc->xhtml_im);
+       elm_entry_entry_set(entry, "");
+       elm_entry_cursor_end_set(entry);
+
+       free(s);
+     }
+   else if ((!strcmp(ev->keyname, "Next")) || (!strcmp(ev->keyname, "KP_Next")))
+     chat_cycle_next(obj);
+   else if ((!strcmp(ev->keyname, "Prior")) || (!strcmp(ev->keyname, "KP_Prior")))
+     chat_cycle_prev(obj);
+   else if (!strcmp(ev->keyname, "Tab"))
+     {
+        if (evas_key_modifier_is_set(ev->modifiers, "Shift"))
+          chat_cycle_prev(obj);
+        else
+          chat_cycle_next(obj);
+     }
+   else if ((!strcmp(ev->keyname, "w")) || (!strcmp(ev->keyname, "Escape")))
+     {
+        Eina_Stringshare *focused;
+
+        focused = evas_object_data_get(obj, "focused");
+        evas_object_del(evas_object_data_get(obj, focused));
+     }
+}
+
+
 static Evas_Object *
 chat_win_new(S2_Auth *sa)
 {
-   Evas_Object *win, *box, *ly, *tb;
+   Evas_Object *win, *box, *ly, *tb, *ic;
    const char *override;
    char buf[PATH_MAX];
    Evas *e;
@@ -185,6 +290,10 @@ chat_win_new(S2_Auth *sa)
    1 | evas_object_key_grab(win, "Tab", ctrl | shift, alt, 1); /* worst warn_unused ever. */
    1 | evas_object_key_grab(win, "Return", 0, ctrl | shift | alt, 1); /* worst warn_unused ever. */
    1 | evas_object_key_grab(win, "KP_Enter", 0, ctrl | shift | alt, 1); /* worst warn_unused ever. */
+   1 | evas_object_key_grab(win, "Escape", 0, ctrl | shift | alt, 1); /* worst warn_unused ever. */
+
+   ic = evas_object_image_filled_add(e);
+   evas_object_data_set(win, "icon", ic);
 
    box = elm_box_add(win);
    EXPAND(box);
@@ -221,31 +330,6 @@ chat_win_new(S2_Auth *sa)
 }
 
 static void
-chat_focus(Evas_Object *pane)
-{
-   Evas_Object *cur, *ly, *win = elm_object_top_widget_get(pane);
-   Elm_Object_Item *it;
-   Eina_Stringshare *focused;
-   S2_Contact *sc;
-
-   sc = evas_object_data_get(pane, "sc");
-   focused = evas_object_data_get(win, "focused");
-   /* trying to refocus current focused */
-   if (focused == sc->jid) return;
-   ly = evas_object_data_get(win, "layout");
-
-   cur = elm_layout_content_unset(ly, "swallow.chat");
-   if (cur) evas_object_hide(cur);
-   elm_layout_content_set(ly, "swallow.chat", pane);
-   evas_object_data_set(win, "focused", sc->jid);
-   
-   it = evas_object_data_get(pane, "toolbar_item");
-   if (it) //can be NULL if selected during creation */
-     elm_toolbar_item_selected_set(it, 1);
-   elm_object_focus_set(elm_object_part_content_get(pane, "elm.swallow.right"), 1);
-}
-
-static void
 chat_toolbar_select(void *data, Evas_Object *obj EINA_UNUSED, void *event_info EINA_UNUSED)
 {
    chat_focus(data);
@@ -255,28 +339,28 @@ static void
 chat_del_cb(void *data, Evas *e EINA_UNUSED, Evas_Object *pane, void *event_info EINA_UNUSED)
 {
    Evas_Object *win;
-   Elm_Object_Item *it, *next;
+   Elm_Object_Item *it;
    S2_Contact *sc = data;
    Eina_Stringshare *focused;
 
-   win = elm_object_top_widget_get(pane);
+   win = evas_object_data_get(pane, "win");
    focused = evas_object_data_get(win, "focused");
+   evas_object_event_callback_del(pane, EVAS_CALLBACK_DEL, chat_del_cb);
    it = evas_object_data_get(pane, "toolbar_item");
    if (!it) return; //canvas deleted
+   evas_object_data_del(win, sc->jid);
    if (focused != sc->jid)
      {
         elm_object_item_del(it);
         return;
      }
-   next = elm_toolbar_item_prev_get(it);
-   if (!next) elm_toolbar_item_next_get(it);
-   if (next)
+   if (elm_toolbar_items_count(elm_layout_content_get(evas_object_data_get(win, "layout"), "swallow.bar")) == 1)
+     evas_object_del(win);
+   else
      {
-        elm_toolbar_item_selected_set(next, 1);
+        chat_cycle_next(win);
         elm_object_item_del(it);
      }
-   else
-     evas_object_del(win);
 }
 
 static void
@@ -296,6 +380,12 @@ chat_new(Evas_Object *win, S2_Contact *sc)
 
    pane = elm_panes_add(win);
    evas_object_event_callback_add(pane, EVAS_CALLBACK_DEL, chat_del_cb, sc);
+   /* elm is hilarious:
+    * if a widget is not directly parented to another elm widget,
+    * that widget is considered "not elm" and widget heirarchy functions will
+    * all return the same object.
+    */
+   evas_object_data_set(pane, "win", win);
    evas_object_data_set(pane, "sc", sc);
    evas_object_data_set(win, sc->jid, pane);
    elm_panes_horizontal_set(pane, 1);
@@ -366,7 +456,12 @@ chat_message(void *d EINA_UNUSED, int t EINA_UNUSED, Shotgun_Event_Message *ev)
    win = eina_hash_find(chats, &ev->account);
    jid = ui_jid_base_get(ev->jid);
    pane = evas_object_data_get(win, jid);
-   if (!pane)
+   if (pane)
+     {
+        if (!evas_object_visible_get(pane))
+          evas_object_data_set(pane, "updated", (void*)1);
+     }
+   else
      {
         S2_Contact *sc;
 
