@@ -129,6 +129,15 @@ if test "x$want_list_basic" != "xno" ; then
 fi
 AM_CONDITIONAL([MOD_LIST_BASIC], [test "x$have_list_basic" = "xyes"])
 
+want_chat_basic=yes
+AC_ARG_ENABLE([module-chat-basic],
+   [AC_HELP_STRING([--disable-module-chat-basic], [disable basic chat module. @<:@default=detect@:>@])],
+   [want_chat_basic=$enableval], [])
+if test "x$want_chat_basic" != "xno" ; then
+   PKG_CHECK_MODULES([CHAT_BASIC], [evas edje elementary], [have_chat_basic=yes])
+fi
+AM_CONDITIONAL([MOD_CHAT_BASIC], [test "x$have_chat_basic" = "xyes"])
+
 ########################################
 
 case "$host_os" in
@@ -190,6 +199,7 @@ Modules:
  * dummy_login.........: $want_dummy_login
  * dbus_conn...........: $want_dbus_conn_mod
  * list_basic..........: $have_list_basic
+ * chat_basic..........: $have_chat_basic
 MODULES_EOF
 echo
 

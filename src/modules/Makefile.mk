@@ -78,3 +78,29 @@ src_modules_list_basic_la_LIBTOOLFLAGS = --tag=disable-static
 
 endif
 
+
+if MOD_CHAT_BASIC
+
+mod_LTLIBRARIES += src/modules/chat_basic.la
+
+src_modules_chat_basic_la_SOURCES = \
+src/modules/chat_basic.c
+
+src_modules_chat_basic_la_CPPFLAGS = \
+$(AM_CFLAGS) \
+$(mod_cppflags) \
+@EFL_CFLAGS@ \
+@CHAT_BASIC_CFLAGS@ \
+-I$(top_srcdir)/src/bin \
+-I$(top_builddir)
+
+src_modules_chat_basic_la_LIBADD = \
+@EFL_LIBS@ \
+@CHAT_BASIC_LIBS@
+
+src_modules_chat_basic_la_LDFLAGS = -module -avoid-version
+
+src_modules_chat_basic_la_LIBTOOLFLAGS = --tag=disable-static
+
+endif
+

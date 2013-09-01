@@ -32,5 +32,9 @@ if MOD_LIST_BASIC
 include data/themes/list_basic.mk
 endif
 
+if MOD_CHAT_BASIC
+include data/themes/chat_basic.mk
+endif
+
 maintainer-clean-local:
 	rm -rf autom4te.cache

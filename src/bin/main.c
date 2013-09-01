@@ -35,6 +35,7 @@ struct _S2_Module
 int ui_log_dom = -1;
 EAPI int S2_EVENT_CONTACT_ADD = -1;
 EAPI int S2_EVENT_CONTACT_UPDATE = -1;
+EAPI int S2_EVENT_CONTACT_CHAT = -1;
 EAPI int S2_EVENT_CONTACT_PRESENCE_ADD = -1;
 EAPI int S2_EVENT_CONTACT_PRESENCE_UPDATE = -1;
 EAPI int S2_EVENT_CONTACT_PRESENCE_DEL = -1;
@@ -50,7 +51,6 @@ static Eina_Hash *connections_by_id = NULL;
 static Eina_Hash *contacts = NULL;
 static Eina_Inlist *modules[S2_MODULE_TYPE_LAST];
 
-static Eina_List *message_send_listeners = NULL;
 static unsigned int connected_count = 0;
 
 static void
@@ -114,6 +114,7 @@ s2_auth_free(S2_Auth *sa)
    eina_hash_del_by_key(connections_by_id, &sa->id);
    eina_hash_free(sa->contacts);
    shotgun_free(sa->auth);
+   eina_list_free(sa->message_send_listeners);
    free(sa);
 }
 
@@ -259,12 +260,10 @@ presence_cb(void *d EINA_UNUSED, int t EINA_UNUSED, Shotgun_Event_Presence *ev)
 {
    S2_Auth *sa;
    S2_Contact *sc;
-   const char *base_jid = ev->jid, *p;
+   const char *base_jid, *p;
 
    sa = shotgun_data_get(ev->account);
-   p = strchr(ev->jid, '/');
-   if (p)
-     base_jid = strndupa(ev->jid, p - ev->jid);
+   base_jid = ui_jid_base_get(ev->jid);
    sc = ui_contact_find(sa, base_jid);
    if (!sc)
      {
@@ -413,13 +412,13 @@ iq_cb(void *d EINA_UNUSED, int t EINA_UNUSED, Shotgun_Event_Iq *ev)
    return ECORE_CALLBACK_RENEW;
 }
 
-static Eina_Bool
-message_cb(void *d EINA_UNUSED, int t EINA_UNUSED, Shotgun_Event_Message *ev)
-{
-#warning send message to chat module...
-   return ECORE_CALLBACK_RENEW;
-}
-
+//static Eina_Bool
+//message_cb(void *d EINA_UNUSED, int t EINA_UNUSED, Shotgun_Event_Message *ev)
+//{
+//#warning send message to chat module...
+   //return ECORE_CALLBACK_RENEW;
+//}
+//
 /********************************* API ******************************/
 
 EAPI S2_Contact *
@@ -431,7 +430,7 @@ ui_contact_find(S2_Auth *sa, const char *jid)
 EAPI void
 ui_contact_chat_open(S2_Contact *sc)
 {
-   
+   ecore_event_add(S2_EVENT_CONTACT_CHAT, sc, fake_free, NULL);
 }
 
 EAPI S2_Auth *
@@ -448,28 +447,30 @@ ui_shotgun_find_by_id(unsigned int id)
 }
 
 EAPI void
-ui_shotgun_message_send(S2_Auth *sa, const char *to, const char *msg, Shotgun_Message_Status status, Eina_Bool xhtml_im)
+ui_shotgun_message_send(S2_Auth *sa, S2_Contact *sc, const char *msg, Shotgun_Message_Status status, Eina_Bool xhtml_im)
 {
    Eina_List *l;
    S2_Message_Send_Listener_Cb cb;
 
-   shotgun_message_send(sa->auth, to, msg, status, xhtml_im);
-   EINA_LIST_FOREACH(message_send_listeners, l, cb)
-     cb(sa, to, msg, status, xhtml_im);
+   shotgun_message_send(sa->auth, ui_contact_send_jid_get(sc), msg, status, xhtml_im);
+   EINA_LIST_FOREACH(sa->message_send_listeners, l, cb)
+     cb(sa, sc, msg, status, xhtml_im);
 }
 
 EAPI void
-ui_shotgun_message_send_listener_add(S2_Message_Send_Listener_Cb cb)
+ui_shotgun_message_send_listener_add(S2_Auth *sa, S2_Message_Send_Listener_Cb cb)
 {
    EINA_SAFETY_ON_NULL_RETURN(cb);
-   message_send_listeners = eina_list_append(message_send_listeners, cb);
+   sa->message_send_listeners = eina_list_append(sa->message_send_listeners, cb);
 }
 
 EAPI void
-ui_shotgun_message_send_listener_del(S2_Message_Send_Listener_Cb cb)
+ui_shotgun_message_send_listener_del(S2_Auth *sa, S2_Message_Send_Listener_Cb cb)
 {
    EINA_SAFETY_ON_NULL_RETURN(cb);
-   message_send_listeners = eina_list_remove(message_send_listeners, cb);
+   EINA_SAFETY_ON_NULL_RETURN(sa);
+   if (sa->message_send_listeners)
+     sa->message_send_listeners = eina_list_remove(sa->message_send_listeners, cb);
 }
 
 
@@ -506,10 +507,11 @@ main(int argc, char *argv[])
    ecore_event_handler_add(SHOTGUN_EVENT_CONNECTION_STATE, (Ecore_Event_Handler_Cb)con_state, NULL);
    ecore_event_handler_add(SHOTGUN_EVENT_PRESENCE, (Ecore_Event_Handler_Cb)presence_cb, NULL);
    ecore_event_handler_add(SHOTGUN_EVENT_IQ, (Ecore_Event_Handler_Cb)iq_cb, NULL);
-   ecore_event_handler_add(SHOTGUN_EVENT_MESSAGE, (Ecore_Event_Handler_Cb)message_cb, NULL);
+   //ecore_event_handler_add(SHOTGUN_EVENT_MESSAGE, (Ecore_Event_Handler_Cb)message_cb, NULL);
 
    S2_EVENT_CONTACT_ADD = ecore_event_type_new();
    S2_EVENT_CONTACT_UPDATE = ecore_event_type_new();
+   S2_EVENT_CONTACT_CHAT = ecore_event_type_new();
    S2_EVENT_CONTACT_PRESENCE_ADD = ecore_event_type_new();
    S2_EVENT_CONTACT_PRESENCE_UPDATE = ecore_event_type_new();
    S2_EVENT_CONTACT_PRESENCE_DEL = ecore_event_type_new();
@@ -567,6 +569,11 @@ main(int argc, char *argv[])
      }
 
    EINA_INLIST_FOREACH(modules[S2_MODULE_TYPE_LIST], mod)
+     {
+        if (!mod->init())
+          ERR("Module '%s' failed to load!", eina_module_file_get(mod->mod));
+     }
+   EINA_INLIST_FOREACH(modules[S2_MODULE_TYPE_CHAT], mod)
      {
         if (!mod->init())
           ERR("Module '%s' failed to load!", eina_module_file_get(mod->mod));

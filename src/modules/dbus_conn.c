@@ -55,13 +55,13 @@ static const Eldbus_Signal connection_signals[] =
 };
 
 static void
-_dbus_connection_signal_message_sent(S2_Auth *sa, const char *to, const char *msg, Shotgun_Message_Status status, Eina_Bool xhtml_im EINA_UNUSED)
+_dbus_connection_signal_message_sent(S2_Auth *sa, S2_Contact *sc, const char *msg, Shotgun_Message_Status status, Eina_Bool xhtml_im EINA_UNUSED)
 {
    Eldbus_Service_Interface *iface;
 
    iface = eina_hash_find(connection_ifaces, shotgun_jid_full_get(sa->auth));
    if (iface)
-     eldbus_service_signal_emit(iface, CONNECTION_SIGNAL_MESSAGE_SENT, to, msg, status);
+     eldbus_service_signal_emit(iface, CONNECTION_SIGNAL_MESSAGE_SENT, ui_contact_send_jid_get(sc), msg, status);
 }
 
 static Eina_Bool
@@ -147,11 +147,11 @@ error:
 static Eldbus_Message *
 _dbus_connection_sendmessage_cb(const Eldbus_Service_Interface *iface EINA_UNUSED, const Eldbus_Message *msg)
 {
-   const char *path, *jid, *txt, *p;
+   const char *path, *jid, *txt;
    Shotgun_Message_Status st;
    unsigned int id;
    S2_Auth *sa;
-   char buf[4096] = {0};
+   S2_Contact *sc;
    Eldbus_Message *reply;
 
    path = eldbus_message_path_get(msg);
@@ -166,12 +166,9 @@ _dbus_connection_sendmessage_cb(const Eldbus_Service_Interface *iface EINA_UNUSE
    if (!eldbus_message_arguments_get(msg, "ssu", &jid, &txt, &st)) goto contact_error;
 
    /* FIXME: need to check existence of resource... */
-   p = strchr(jid, '/');
-   if (p)
-     memcpy(buf, jid, p - jid);
-   if (!ui_contact_find(sa, p ? buf : jid)) goto contact_error;
-   /* FIXME: need to check xhtml_im */
-   ui_shotgun_message_send(sa, jid, txt, st, 0);
+   sc = ui_contact_find(sa, ui_jid_base_get(jid));
+   if (!sc) goto contact_error;
+   ui_shotgun_message_send(sa, sc, txt, st, sc->xhtml_im);
    reply = eldbus_message_method_return_new(msg);
    return reply;
 acct_error:
@@ -228,6 +225,7 @@ _dbus_connect_cb(void *d EINA_UNUSED, int t EINA_UNUSED, Shotgun_Auth *auth)
         if (!sa) return ECORE_CALLBACK_RENEW;
         snprintf(buf, sizeof(buf), "/%u", sa->id);
         iface = eldbus_service_interface_register(dbus_conn, buf, &connection_desc);
+        ui_shotgun_message_send_listener_add(sa, _dbus_connection_signal_message_sent);
         eina_hash_add(connection_ifaces, shotgun_jid_full_get(auth), iface);
      }
    return ECORE_CALLBACK_RENEW;
@@ -236,7 +234,10 @@ _dbus_connect_cb(void *d EINA_UNUSED, int t EINA_UNUSED, Shotgun_Auth *auth)
 static Eina_Bool
 _dbus_disconnect_cb(void *d EINA_UNUSED, int t EINA_UNUSED, Shotgun_Auth *auth)
 {
+   S2_Auth *sa = shotgun_data_get(auth);
+
    eina_hash_del_by_key(connection_ifaces, shotgun_jid_full_get(auth));
+   ui_shotgun_message_send_listener_del(sa, _dbus_connection_signal_message_sent);
    return ECORE_CALLBACK_RENEW;
 }
 
@@ -254,7 +255,6 @@ ui_module_init(void)
    eldbus_name_request(dbus_conn, "org.s2", 0, _dbus_request_name_cb, NULL);
    eldbus_service_interface_register(dbus_conn, "/", &base_desc);
    core_iface = eldbus_service_interface_register(dbus_conn, "/", &core_desc);
-   ui_shotgun_message_send_listener_add(_dbus_connection_signal_message_sent);
    connection_ifaces = eina_hash_string_superfast_new((Eina_Free_Cb)eldbus_service_object_unregister);
    E_LIST_HANDLER_APPEND(handlers, SHOTGUN_EVENT_MESSAGE, _dbus_connection_signal_message_received_cb, NULL);
    E_LIST_HANDLER_APPEND(handlers, SHOTGUN_EVENT_PRESENCE, _dbus_connection_signal_status_cb, NULL);

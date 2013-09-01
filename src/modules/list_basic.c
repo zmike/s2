@@ -217,7 +217,6 @@ overlay_item_content_get(Shotgun_Event_Presence *p, Evas_Object *obj, const char
 {
    Evas_Object *ic;
    const char *file;
-   char *jid, *s;
 
    file = evas_object_data_get(elm_object_top_widget_get(obj), "file");
    if (!strcmp(part, "elm.swallow.end"))
@@ -225,9 +224,7 @@ overlay_item_content_get(Shotgun_Event_Presence *p, Evas_Object *obj, const char
         return NULL;
      }
 
-   s = strchr(p->jid, '/');
-   jid = strndupa(p->jid, s - p->jid);
-   return list_item_status_icon_new(ui_contact_find(shotgun_data_get(p->account), jid), p, file, evas_object_evas_get(obj));
+   return list_item_status_icon_new(ui_contact_find(shotgun_data_get(p->account), ui_jid_base_get(p->jid)), p, file, evas_object_evas_get(obj));
 }
 
 static void
@@ -407,6 +404,14 @@ list_mouse_down_cb(void *data, Evas *e, Evas_Object *obj, Evas_Event_Mouse_Down 
    evas_object_event_callback_add(rect, EVAS_CALLBACK_MOUSE_DOWN, overlay_dismiss, overlay);
 }
 
+static void
+list_click_cb(void *data, Evas_Object *obj, Elm_Object_Item *it)
+{
+   S2_Contact *sc = elm_object_item_data_get(it);
+
+   ui_contact_chat_open(sc);
+}
+
 static Evas_Object *
 list_create(S2_Auth *sa)
 {
@@ -444,8 +449,8 @@ list_create(S2_Auth *sa)
    elm_genlist_mode_set(o, ELM_LIST_COMPRESS);
    elm_layout_content_set(ly, "swallow.list", o);
    evas_object_event_callback_add(ly, EVAS_CALLBACK_MOUSE_DOWN, (Evas_Object_Event_Cb)list_mouse_down_cb, o);
-   //evas_object_smart_callback_add(o, "activated",
-                                  //(Evas_Smart_Cb)list_click_cb, NULL);
+   evas_object_smart_callback_add(o, "activated",
+                                  (Evas_Smart_Cb)list_click_cb, NULL);
    //evas_object_smart_callback_add(o, "moved",
                                   //(Evas_Smart_Cb)list_reorder_cb, NULL);
 
