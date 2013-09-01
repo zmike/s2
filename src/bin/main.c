@@ -162,7 +162,7 @@ con(void *d EINA_UNUSED, int type EINA_UNUSED, Shotgun_Auth *auth)
      {
         S2_Auth *sa;
 
-        sa = malloc(sizeof(S2_Auth));
+        sa = calloc(1, sizeof(S2_Auth));
         sa->auth = auth;
         shotgun_data_set(auth, sa);
         sa->contacts = eina_hash_string_superfast_new((Eina_Free_Cb)sc_free);
