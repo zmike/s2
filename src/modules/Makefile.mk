@@ -1,5 +1,5 @@
 mod_cppflags = \
--DPACKAGE_DATA_DIR=\"$(datadir)\"
+-DPACKAGE_DATA_DIR=\"$(datadir)/s2\"
 
 moddir = $(libdir)/s2/$(MODULE_ARCH)
 
