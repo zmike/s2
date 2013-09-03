@@ -1,0 +1,5 @@
+export UI_SERVER=talk.google.com
+export UI_NAME=test.name
+export UI_DOMAIN=gmail.com
+export UI_PASSWORD=passwoooooooord
+export UI_MODULE_DIR=$(readlink -f src/modules/.libs)
